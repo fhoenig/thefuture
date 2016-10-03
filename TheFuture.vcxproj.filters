@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{02d5dfb8-f8e3-4aaa-a7f2-1cda1c2a8faa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External">
+      <UniqueIdentifier>{fba97b77-3ce9-4141-8d9f-27953ca8ae63}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\GLFW">
+      <UniqueIdentifier>{6f02a873-dee1-4c52-8804-c4987a74ac8a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source\TheFuture.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\context.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\init.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\input.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\monitor.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\win32_init.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\win32_joystick.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\win32_monitor.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\win32_time.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\win32_tls.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\win32_window.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\window.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\egl_context.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\wgl_context.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+    <ClCompile Include="External\glfw\src\vulkan.c">
+      <Filter>External\GLFW</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
