@@ -27,6 +27,15 @@
     <ClCompile Include="External\glfw\src\window.c" />
     <ClCompile Include="Source\TheFuture.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="test1.comp">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(VK_SDK_PATH)\Bin\glslangvalidator.exe -V %(FullPath) -o $(outdir)\%(Filename).spv</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(VK_SDK_PATH)\Bin\glslangvalidator.exe -V %(FullPath) -o $(outdir)\%(Filename).spv</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(outdir)\%(Filename).spv</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(outdir)\%(Filename).spv</Outputs>
+    </CustomBuild>
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{0725699A-E918-441E-8114-34BEACC2252B}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>

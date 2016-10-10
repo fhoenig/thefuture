@@ -3,10 +3,66 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 #include <glm/glm.hpp>
+#include <cassert>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <iostream>
+
+using namespace std::tr2;
+
+VkBool32 messageCallback(VkDebugReportFlagsEXT flags,
+						 VkDebugReportObjectTypeEXT objType,
+						 uint64_t srcObject,
+						 size_t location,
+						 int32_t msgCode,
+						 const char* pLayerPrefix,
+						 const char* pMsg,
+						 void* pUserData) 
+{
+	std::string message;
+	{
+		std::stringstream buf;
+		if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) 
+		{
+			buf << "ERROR: ";
+		}
+		else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) 
+		{
+			buf << "WARNING: ";
+		}
+		else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) 
+		{
+			buf << "PERF: ";
+		}
+		else 
+		{
+			return false;
+		}
+		buf << "[" << pLayerPrefix << "] Code " << msgCode << " : " << pMsg;
+		message = buf.str();
+	}
+
+	std::cout << message << std::endl;
+#ifdef _MSC_VER 
+	OutputDebugStringA(message.c_str());
+	OutputDebugStringA("\n");
+#endif
+	return false;
+}
+
 
 
 int main(int argc, char* argv[])
 {
+	{
+		char buffer[MAX_PATH];
+		GetModuleFileNameA(NULL, buffer, MAX_PATH);
+		std::string::size_type pos = std::string(buffer).find_last_of("\\/");
+		std::string basepath = std::string(buffer).substr(0, pos);
+		SetCurrentDirectoryA(basepath.c_str());
+	}
+
 	vk::Instance instance;
 
 	std::vector<vk::PhysicalDevice> physicalDevices;
@@ -19,13 +75,25 @@ int main(int argc, char* argv[])
 	// Stores all available memory (type) properties for the physical device
 	vk::PhysicalDeviceMemoryProperties deviceMemoryProperties;
 
+	std::vector<const char*> instance_layer_names;
+	instance_layer_names.push_back("VK_LAYER_GOOGLE_threading");
+	instance_layer_names.push_back("VK_LAYER_LUNARG_param_checker");
+	instance_layer_names.push_back("VK_LAYER_LUNARG_object_tracker");
+	instance_layer_names.push_back("VK_LAYER_LUNARG_mem_tracker");
+	instance_layer_names.push_back("VK_LAYER_LUNARG_device_limits");
+	instance_layer_names.push_back("VK_LAYER_LUNARG_draw_state");
+	instance_layer_names.push_back("VK_LAYER_LUNARG_image");
+	instance_layer_names.push_back("VK_LAYER_LUNARG_swapchain");
+	instance_layer_names.push_back("VK_LAYER_GOOGLE_unique_objects");
+
+	
 	// Vulkan instance
 	vk::ApplicationInfo appInfo;
 	appInfo.pApplicationName = "TheFuture";
 	appInfo.pEngineName = "TheFuture";
 	appInfo.apiVersion = VK_API_VERSION_1_0;
 
-	std::vector<const char*> enabledExtensions = { VK_KHR_SURFACE_EXTENSION_NAME };
+	std::vector<const char*> enabledExtensions = { VK_KHR_SURFACE_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_EXTENSION_NAME };
 
 	// Enable surface extensions depending on os
 	enabledExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
@@ -36,6 +104,11 @@ int main(int argc, char* argv[])
 	{
 		instanceCreateInfo.enabledExtensionCount = (uint32_t)enabledExtensions.size();
 		instanceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data();
+	}
+	if (instance_layer_names.size() > 0)
+	{
+		instanceCreateInfo.enabledLayerCount = instance_layer_names.size();
+		instanceCreateInfo.ppEnabledLayerNames = instance_layer_names.data();
 	}
 	instance = vk::createInstance(instanceCreateInfo);
 
@@ -63,13 +136,14 @@ int main(int argc, char* argv[])
 
 	GLFWwindow* window;
 	glfwInit();
+	
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	auto monitor = glfwGetPrimaryMonitor();
 	auto mode = glfwGetVideoMode(monitor);
 	uint32_t screenWidth = mode->width;
 	uint32_t screenHeight = mode->height;
-	vk::Extent2D size(screenWidth / 2, screenHeight / 2);
-	window = glfwCreateWindow(size.width, size.height, "The Future by Unbound", NULL, NULL);
+	vk::Extent2D size(1280, 720);
+	window = glfwCreateWindow(size.width, size.height, "The Future, Now", NULL, NULL);
 	// Disable window resize
 	glfwSetWindowSizeLimits(window, size.width, size.height, size.width, size.height);
 	//glfwSetWindowUserPointer(window, this);
@@ -92,16 +166,12 @@ int main(int argc, char* argv[])
 	vk::ColorSpaceKHR colorSpace;
 	uint32_t queueNodeIndex = UINT32_MAX;
 
-	// If the surface format list only includes one entry with  vk::Format::eUndefined,
-	// there is no preferered format, so we assume  vk::Format::eB8G8R8A8Unorm
-	if ((formatCount == 1) && (surfaceFormats[0].format == vk::Format::eUndefined)) {
+	if ((formatCount == 1) && (surfaceFormats[0].format == vk::Format::eUndefined)) 
+	{
 		colorFormat = vk::Format::eB8G8R8A8Unorm;
 	}
-	else {
-		// Always select the first available color format
-		// If you need a specific format (e.g. SRGB) you'd need to
-		// iterate over the list of available surface format and
-		// check for it's presence
+	else 
+	{
 		colorFormat = surfaceFormats[0].format;
 	}
 	colorSpace = surfaceFormats[0].colorSpace;
@@ -114,16 +184,21 @@ int main(int argc, char* argv[])
 
 	for (queueIndex = 0; queueIndex < queueCount; queueIndex++) 
 	{
-		if (queueProps[queueIndex].queueFlags & vk::QueueFlagBits::eCompute)
+		if (queueProps[queueIndex].queueFlags & (vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics))
 		{
 			break;
 		}
 	}
 	assert(queueIndex < queueCount);
+	
+
+	PFN_vkCreateDebugReportCallbackEXT CreateDebugReportCallback = VK_NULL_HANDLE;
+	PFN_vkDestroyDebugReportCallbackEXT DestroyDebugReportCallback = VK_NULL_HANDLE;
+	PFN_vkDebugReportMessageEXT dbgBreakCallback = VK_NULL_HANDLE;
+	VkDebugReportCallbackEXT msgCallback;
 
 	{
-
-		// Vulkan device
+		// Vulkan logical device
 		vk::Device device;
 		{
 			std::array<float, 1> queuePriorities = { 0.0f };
@@ -143,57 +218,77 @@ int main(int argc, char* argv[])
 			}
 			device = physicalDevice.createDevice(deviceCreateInfo);
 		}
-	
-		vk::SwapchainKHR swapChain;
-		vk::PresentInfoKHR presentInfo;
 
-		// Get physical device surface properties and formats
+		// DEBUGGING
+		CreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
+		DestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
+		dbgBreakCallback = (PFN_vkDebugReportMessageEXT)vkGetInstanceProcAddr(instance, "vkDebugReportMessageEXT");
+
+		vk::DebugReportFlagsEXT flags(vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eWarning);
+		VkDebugReportCallbackCreateInfoEXT dbgCreateInfo = {};
+		dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
+		dbgCreateInfo.pfnCallback = (PFN_vkDebugReportCallbackEXT)messageCallback;
+		dbgCreateInfo.flags = flags.operator VkSubpassDescriptionFlags();
+
+		VkResult err = CreateDebugReportCallback(instance, &dbgCreateInfo, nullptr,	&msgCallback);
+		assert(!err);
+	
+		vk::Queue computeQueue = device.getQueue(queueIndex, 0);
+
+		vk::SwapchainKHR swapChain;
+		
 		vk::SurfaceCapabilitiesKHR surfCaps = physicalDevice.getSurfaceCapabilitiesKHR(surface);
-		// Get available present modes
 		std::vector<vk::PresentModeKHR> presentModes = physicalDevice.getSurfacePresentModesKHR(surface);
+
 		auto presentModeCount = presentModes.size();
 
 		vk::Extent2D swapchainExtent;
-		// width and height are either both -1, or both not -1.
-		if (surfCaps.currentExtent.width == -1) {
-			// If the surface size is undefined, the size is set to
-			// the size of the images requested.
+		
+		if (surfCaps.currentExtent.width == -1) 
+		{
 			swapchainExtent = size;
 		}
-		else {
-			// If the surface size is defined, the swap chain size must match
+		else 
+		{
 			swapchainExtent = surfCaps.currentExtent;
 			size = surfCaps.currentExtent;
 		}
 
-		// Prefer mailbox mode if present, it's the lowest latency non-tearing present  mode
 		vk::PresentModeKHR swapchainPresentMode = vk::PresentModeKHR::eFifo;
 		{
-			for (size_t i = 0; i < presentModeCount; i++) {
-				if (presentModes[i] == vk::PresentModeKHR::eMailbox) {
+			for (size_t i = 0; i < presentModeCount; i++) 
+			{
+				if (presentModes[i] == vk::PresentModeKHR::eMailbox) 
+				{
 					swapchainPresentMode = vk::PresentModeKHR::eMailbox;
 					break;
 				}
-				if ((swapchainPresentMode != vk::PresentModeKHR::eMailbox) && (presentModes[i] == vk::PresentModeKHR::eImmediate)) {
+				if ((swapchainPresentMode != vk::PresentModeKHR::eMailbox) && (presentModes[i] == vk::PresentModeKHR::eImmediate)) 
+				{
 					swapchainPresentMode = vk::PresentModeKHR::eImmediate;
 				}
 			}
 		}
 
-		// Determine the number of images
-		uint32_t desiredNumberOfSwapchainImages = surfCaps.minImageCount + 1;
-		if ((surfCaps.maxImageCount > 0) && (desiredNumberOfSwapchainImages > surfCaps.maxImageCount)) {
+		uint32_t desiredNumberOfSwapchainImages = surfCaps.minImageCount;
+		if ((surfCaps.maxImageCount > 0) && (desiredNumberOfSwapchainImages > surfCaps.maxImageCount)) 
+		{
 			desiredNumberOfSwapchainImages = surfCaps.maxImageCount;
 		}
 
 		vk::SurfaceTransformFlagBitsKHR preTransform;
-		if (surfCaps.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity) {
+		if (surfCaps.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity) 
+		{
 			preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity;
 		}
-		else {
+		else 
+		{
 			preTransform = surfCaps.currentTransform;
 		}
 
+		VkBool32 isSupported;
+		physicalDevice.getSurfaceSupportKHR(queueIndex, surface, &isSupported);
+		assert(isSupported == true);
 	
 		vk::SwapchainCreateInfoKHR swapchainCI;
 		swapchainCI.surface = surface;
@@ -201,7 +296,7 @@ int main(int argc, char* argv[])
 		swapchainCI.imageFormat = colorFormat;
 		swapchainCI.imageColorSpace = colorSpace;
 		swapchainCI.imageExtent = vk::Extent2D{ swapchainExtent.width, swapchainExtent.height };
-		swapchainCI.imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst;
+		swapchainCI.imageUsage = vk::ImageUsageFlagBits::eStorage;
 		swapchainCI.preTransform = preTransform;
 		swapchainCI.imageArrayLayers = 1;
 		swapchainCI.imageSharingMode = vk::SharingMode::eExclusive;
@@ -213,12 +308,239 @@ int main(int argc, char* argv[])
 		swapChain = device.createSwapchainKHR(swapchainCI);
 
 
+		vk::ImageViewCreateInfo colorAttachmentViewInfo;
+		colorAttachmentViewInfo.format = colorFormat;
+		colorAttachmentViewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+		colorAttachmentViewInfo.subresourceRange.levelCount = 1;
+		colorAttachmentViewInfo.subresourceRange.layerCount = 1;
+		colorAttachmentViewInfo.viewType = vk::ImageViewType::e2D;
+
+		// Get the swap chain images
+		auto swapChainImages = device.getSwapchainImagesKHR(swapChain);
+		uint32_t imageCount = (uint32_t)swapChainImages.size();
+
+		// Get the swap chain buffers containing the image and imageview
+		struct SwapChainImage 
+		{
+			vk::Image image;
+			vk::ImageView view;
+			vk::Fence fence;
+		};
+
+		std::vector<SwapChainImage> images;
+		images.resize(imageCount);
+		for (uint32_t i = 0; i < imageCount; i++) 
+		{
+			images[i].image = swapChainImages[i];
+			colorAttachmentViewInfo.image = swapChainImages[i];
+			images[i].view = device.createImageView(colorAttachmentViewInfo);
+		}
+
+		vk::PresentInfoKHR presentInfo;
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &swapChain;
+
+		vk::CommandPool commandPool;
+		{
+			vk::CommandPoolCreateInfo commandPoolCreateInfo;
+			commandPoolCreateInfo.queueFamilyIndex = queueIndex;
+			commandPoolCreateInfo.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+			commandPool = device.createCommandPool(commandPoolCreateInfo);
+		}
+
+		std::vector<vk::CommandBuffer> commandBuffers;
+
+		// Allocate command buffers
+		{
+			vk::CommandBufferAllocateInfo commandBufferAllocateInfo;
+			commandBufferAllocateInfo.commandPool = commandPool;
+			commandBufferAllocateInfo.commandBufferCount = imageCount;
+			commandBufferAllocateInfo.level = vk::CommandBufferLevel::ePrimary;
+			commandBuffers = device.allocateCommandBuffers(commandBufferAllocateInfo);
+		}
+
+		vk::Semaphore acquireCompleteSemaphore;
+		vk::Semaphore renderCompleteSemaphore;
+		{
+			vk::SemaphoreCreateInfo info;
+			acquireCompleteSemaphore = device.createSemaphore(info);
+			renderCompleteSemaphore = device.createSemaphore(info);
+		}
+
+		vk::PipelineCache pipelineCache;
+		{
+			vk::PipelineCacheCreateInfo info;
+			info.initialDataSize = 0;
+			pipelineCache = device.createPipelineCache(info);
+		}
+
+		// load the compute module
+		vk::ShaderModule test1;
+		{
+			std::ifstream f("test1.spv", std::ios::binary);
+			std::vector<unsigned char> bin;
+			uint32_t format;
+
+			if (f.good())
+			{
+				f.seekg(0, f.end);
+				int filesize = f.tellg();
+				bin.resize(filesize);
+				f.seekg(0, f.beg);
+				f.read((char*)bin.data(), filesize);
+				f.close();
+			}
+			else
+			{
+				throw std::system_error(std::error_code(), "couldn't load spir-v module");
+			}
+			vk::ShaderModuleCreateInfo info;
+			info.codeSize = bin.size();
+			info.pCode = (const uint32_t*)(bin.data());
+			test1 = device.createShaderModule(info);
+		}
+
+		vk::PipelineLayout test1Layout;
+		vk::DescriptorSetLayout test1DescSetLayout;
+		{
+			std::vector<vk::DescriptorSetLayoutBinding> setLayoutBindings = {
+				vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eCompute)
+			};
+			vk::DescriptorSetLayoutCreateInfo desclayoutinfo;
+			desclayoutinfo.bindingCount = setLayoutBindings.size();
+			desclayoutinfo.pBindings = setLayoutBindings.data();
+
+			test1DescSetLayout = device.createDescriptorSetLayout(desclayoutinfo);
+
+			vk::PushConstantRange range;
+			range.stageFlags = vk::ShaderStageFlagBits::eCompute;
+			range.offset = 0;
+			range.size = 4 * sizeof(float);
+			
+			vk::PipelineLayoutCreateInfo info;
+			info.pushConstantRangeCount = 1;
+			info.pPushConstantRanges = &range;
+			info.setLayoutCount = 1;
+			info.pSetLayouts = &test1DescSetLayout;
+			test1Layout = device.createPipelineLayout(info);
+		}
+
+		// pipeline 
+		vk::Pipeline computePipeline;
+		{
+			vk::PipelineShaderStageCreateInfo computeStageInfo;
+			computeStageInfo.module = test1;
+			computeStageInfo.pName = "main";
+			computeStageInfo.stage = vk::ShaderStageFlagBits::eCompute;
+			
+			
+			vk::ComputePipelineCreateInfo info;
+			info.layout = test1Layout;
+			info.stage = computeStageInfo;
+
+			computePipeline = device.createComputePipeline(pipelineCache, info);
+		}
+
+		// descriptor pool
+		vk::DescriptorPool descriptorPool;
+		{
+			std::vector<vk::DescriptorPoolSize> poolSizes =
+			{
+				//vk::DescriptorPoolSize(vk::DescriptorType::eSampler, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eSampledImage, 4),
+				vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 2),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eUniformTexelBuffer, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eStorageTexelBuffer, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eUniformBufferDynamic, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eStorageBufferDynamic, 4),
+				//vk::DescriptorPoolSize(vk::DescriptorType::eInputAttachment, 4)
+			};
+			vk::DescriptorPoolCreateInfo descriptorPoolInfo;
+			descriptorPoolInfo.maxSets = 16;
+			descriptorPoolInfo.poolSizeCount = poolSizes.size();
+			descriptorPoolInfo.pPoolSizes = poolSizes.data();
+			descriptorPool = device.createDescriptorPool(descriptorPoolInfo);
+		}
+
+		// create descriptor sets for both swap chain images
+		std::vector<vk::DescriptorSet> descriptorSets;
+		{
+			vk::DescriptorSetAllocateInfo allocInfo(descriptorPool, 1, &test1DescSetLayout);
+			descriptorSets.push_back(device.allocateDescriptorSets(allocInfo)[0]);
+			descriptorSets.push_back(device.allocateDescriptorSets(allocInfo)[0]);
+		}
+
+		for (int i = 0; i < imageCount; i++)
+		{
+			vk::DescriptorImageInfo imginfo(nullptr, images[i].view, vk::ImageLayout::eGeneral);
+			vk::WriteDescriptorSet writeSet(descriptorSets[i], 0, 0, 1, vk::DescriptorType::eStorageImage, &imginfo);
+			device.updateDescriptorSets(1, &writeSet, 0, nullptr);
+		}
+
+		// command buffer submission
+		vk::SubmitInfo submitInfo;
+		vk::PipelineStageFlags stageFlags = vk::PipelineStageFlagBits::eBottomOfPipe;
+		submitInfo.pWaitDstStageMask = &stageFlags;
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &acquireCompleteSemaphore;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &renderCompleteSemaphore;
+
+		// commandBuffers
+		vk::CommandBufferBeginInfo cmdBufInfo;
+		cmdBufInfo.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;
+
+		int c = 0;
+		for (auto& computeCmdBuffer : commandBuffers)
+		{
+			std::vector<float> pushConstantValues = { 1280.0f, 720.0f, 0.0f, 0.0f };
+			computeCmdBuffer.begin(cmdBufInfo);
+			computeCmdBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
+			computeCmdBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, test1Layout, 0, descriptorSets[c], nullptr);
+			computeCmdBuffer.pushConstants<float>(test1Layout, vk::ShaderStageFlagBits::eCompute, 0, pushConstantValues);
+			computeCmdBuffer.dispatch(1280 / 16, 720 / 16, 1);
+			computeCmdBuffer.end();
+			c++;
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////
+		uint32_t currentImage;
 		while (glfwWindowShouldClose(window) == false)
 		{
 			glfwPollEvents();
-			Sleep(10);
-		}
 
+			// aquire next swapchain image
+			auto resultValue = device.acquireNextImageKHR(swapChain, UINT64_MAX, acquireCompleteSemaphore, vk::Fence());
+			vk::Result result = resultValue.result;
+			if (result != vk::Result::eSuccess) 
+			{
+				throw std::error_code(result);
+			}
+			currentImage = resultValue.value;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &(commandBuffers[currentImage]);
+			computeQueue.submit(submitInfo, vk::Fence());
+
+			presentInfo.pImageIndices = &currentImage;
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = &renderCompleteSemaphore;
+			computeQueue.presentKHR(presentInfo);
+		}
+		
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+		// cleanup
+		DestroyDebugReportCallback(instance, msgCallback, nullptr);
+
+		for (uint32_t i = 0; i < imageCount; i++)
+		{
+			device.destroyImageView(images[i].view);
+		}
+		device.destroyCommandPool(commandPool);
 		device.destroySwapchainKHR(swapChain);
 		device.destroy();
 	}

@@ -58,4 +58,9 @@
       <Filter>External\GLFW</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="test1.comp">
+      <Filter>Source</Filter>
+    </CustomBuild>
+  </ItemGroup>
 </Project>
