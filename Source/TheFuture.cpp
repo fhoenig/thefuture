@@ -35,6 +35,10 @@ VkBool32 messageCallback(VkDebugReportFlagsEXT flags,
 		{
 			buf << "PERF: ";
 		}
+		else if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)
+		{
+			buf << "INFO: ";
+		}
 		else 
 		{
 			return false;
@@ -85,7 +89,9 @@ int main(int argc, char* argv[])
 	instance_layer_names.push_back("VK_LAYER_LUNARG_image");
 	instance_layer_names.push_back("VK_LAYER_LUNARG_swapchain");
 	instance_layer_names.push_back("VK_LAYER_GOOGLE_unique_objects");
-
+	//instance_layer_names.push_back("VK_LAYER_NV_nsight");
+	//instance_layer_names.push_back("VK_LAYER_NV_optimus");
+	
 	
 	// Vulkan instance
 	vk::ApplicationInfo appInfo;
@@ -224,7 +230,7 @@ int main(int argc, char* argv[])
 		DestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
 		dbgBreakCallback = (PFN_vkDebugReportMessageEXT)vkGetInstanceProcAddr(instance, "vkDebugReportMessageEXT");
 
-		vk::DebugReportFlagsEXT flags(vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eWarning);
+		vk::DebugReportFlagsEXT flags(vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eWarning |  vk::DebugReportFlagBitsEXT::ePerformanceWarning);
 		VkDebugReportCallbackCreateInfoEXT dbgCreateInfo = {};
 		dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
 		dbgCreateInfo.pfnCallback = (PFN_vkDebugReportCallbackEXT)messageCallback;
@@ -511,6 +517,7 @@ int main(int argc, char* argv[])
 		while (glfwWindowShouldClose(window) == false)
 		{
 			glfwPollEvents();
+			float time = glfwGetTime();
 
 			// aquire next swapchain image
 			auto resultValue = device.acquireNextImageKHR(swapChain, UINT64_MAX, acquireCompleteSemaphore, vk::Fence());
