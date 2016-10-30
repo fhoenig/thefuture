@@ -120,23 +120,14 @@ int main(int argc, char* argv[])
 
 	// Physical device
 	physicalDevices = instance.enumeratePhysicalDevices();
-	// Note :
-	// This example will always use the first physical device reported,
-	// change the vector index if you have multiple Vulkan devices installed
-	// and want to use another one
 	physicalDevice = physicalDevices[0];
 
-	// Version information for Vulkan is stored in a single 32 bit integer
-	// with individual bits representing the major, minor and patch versions.
-	// The maximum possible major and minor version is 512 (look out nVidia)
-	// while the maximum possible patch version is 2048
-
-	// Store properties (including limits) and features of the phyiscal device
-	// So examples can check against them and see if a feature is actually supported
+	// Store properties
 	deviceProperties = physicalDevice.getProperties();
 	uint32_t version = deviceProperties.apiVersion;
 	uint32_t driverVersion = deviceProperties.driverVersion;
 	deviceFeatures = physicalDevice.getFeatures();
+	
 	// Gather physical device memory properties
 	deviceMemoryProperties = physicalDevice.getMemoryProperties();
 
@@ -182,9 +173,13 @@ int main(int argc, char* argv[])
 	}
 	colorSpace = surfaceFormats[0].colorSpace;
 
-
-	uint32_t queueIndex = 0;
 	
+	// find a device command queue with graphics and compute caps. 
+	// I'm assuming for a graphics card without a display attached the queue with the graphics
+	// flag should not show up here.
+	// The transfer queue is separate which abstracts the NV reality of being able to do
+	// concurrent transfers and rendering / compute. I think we have to manage this manually in Vulkan.
+	uint32_t queueIndex = 0;
 	std::vector<vk::QueueFamilyProperties> queueProps = physicalDevice.getQueueFamilyProperties();
 	uint32_t queueCount = queueProps.size();
 
@@ -198,11 +193,6 @@ int main(int argc, char* argv[])
 	assert(queueIndex < queueCount);
 	
 
-	PFN_vkCreateDebugReportCallbackEXT CreateDebugReportCallback = VK_NULL_HANDLE;
-	PFN_vkDestroyDebugReportCallbackEXT DestroyDebugReportCallback = VK_NULL_HANDLE;
-	PFN_vkDebugReportMessageEXT dbgBreakCallback = VK_NULL_HANDLE;
-	VkDebugReportCallbackEXT msgCallback;
-
 	{
 		// Vulkan logical device
 		vk::Device device;
@@ -212,6 +202,7 @@ int main(int argc, char* argv[])
 			queueCreateInfo.queueFamilyIndex = queueIndex;
 			queueCreateInfo.queueCount = 1;
 			queueCreateInfo.pQueuePriorities = queuePriorities.data();
+			
 			std::vector<const char*> enabledExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 			vk::DeviceCreateInfo deviceCreateInfo;
 			deviceCreateInfo.queueCreateInfoCount = 1;
@@ -223,14 +214,21 @@ int main(int argc, char* argv[])
 				deviceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data();
 			}
 			device = physicalDevice.createDevice(deviceCreateInfo);
+			// now we have a logical device with one queue for compute (and graphics which I assume is required by us asking for
+			// a swapchain.
 		}
 
-		// DEBUGGING
+		// debug layer callbacks, etc.
+		PFN_vkCreateDebugReportCallbackEXT CreateDebugReportCallback = VK_NULL_HANDLE;
+		PFN_vkDestroyDebugReportCallbackEXT DestroyDebugReportCallback = VK_NULL_HANDLE;
+		PFN_vkDebugReportMessageEXT dbgBreakCallback = VK_NULL_HANDLE;
+		VkDebugReportCallbackEXT msgCallback;
+
 		CreateDebugReportCallback = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
 		DestroyDebugReportCallback = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
 		dbgBreakCallback = (PFN_vkDebugReportMessageEXT)vkGetInstanceProcAddr(instance, "vkDebugReportMessageEXT");
 
-		vk::DebugReportFlagsEXT flags(vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eWarning |  vk::DebugReportFlagBitsEXT::ePerformanceWarning);
+		vk::DebugReportFlagsEXT flags(vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eWarning |vk::DebugReportFlagBitsEXT::ePerformanceWarning);
 		VkDebugReportCallbackCreateInfoEXT dbgCreateInfo = {};
 		dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
 		dbgCreateInfo.pfnCallback = (PFN_vkDebugReportCallbackEXT)messageCallback;
@@ -239,15 +237,15 @@ int main(int argc, char* argv[])
 		VkResult err = CreateDebugReportCallback(instance, &dbgCreateInfo, nullptr,	&msgCallback);
 		assert(!err);
 	
+		// compute queue
 		vk::Queue computeQueue = device.getQueue(queueIndex, 0);
-
-		vk::SwapchainKHR swapChain;
 		
+		// swap chain
+		vk::SwapchainKHR swapChain;
 		vk::SurfaceCapabilitiesKHR surfCaps = physicalDevice.getSurfaceCapabilitiesKHR(surface);
 		std::vector<vk::PresentModeKHR> presentModes = physicalDevice.getSurfacePresentModesKHR(surface);
 
 		auto presentModeCount = presentModes.size();
-
 		vk::Extent2D swapchainExtent;
 		
 		if (surfCaps.currentExtent.width == -1) 
@@ -260,6 +258,7 @@ int main(int argc, char* argv[])
 			size = surfCaps.currentExtent;
 		}
 
+		// pick a present mode
 		vk::PresentModeKHR swapchainPresentMode = vk::PresentModeKHR::eFifo;
 		{
 			for (size_t i = 0; i < presentModeCount; i++) 
@@ -276,12 +275,14 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		// use minimum image count
 		uint32_t desiredNumberOfSwapchainImages = surfCaps.minImageCount;
 		if ((surfCaps.maxImageCount > 0) && (desiredNumberOfSwapchainImages > surfCaps.maxImageCount)) 
 		{
 			desiredNumberOfSwapchainImages = surfCaps.maxImageCount;
 		}
 
+		// this is for back projection or flippable monitors I'd guess
 		vk::SurfaceTransformFlagBitsKHR preTransform;
 		if (surfCaps.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity) 
 		{
@@ -292,6 +293,7 @@ int main(int argc, char* argv[])
 			preTransform = surfCaps.currentTransform;
 		}
 
+		// validation layers yell at us if we don't ask again if the surface is supported
 		VkBool32 isSupported;
 		physicalDevice.getSurfaceSupportKHR(queueIndex, surface, &isSupported);
 		assert(isSupported == true);
@@ -495,22 +497,6 @@ int main(int argc, char* argv[])
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &renderCompleteSemaphore;
 
-		// commandBuffers
-		vk::CommandBufferBeginInfo cmdBufInfo;
-		cmdBufInfo.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;
-
-		int c = 0;
-		for (auto& computeCmdBuffer : commandBuffers)
-		{
-			std::vector<float> pushConstantValues = { 1280.0f, 720.0f, 0.0f, 0.0f };
-			computeCmdBuffer.begin(cmdBufInfo);
-			computeCmdBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
-			computeCmdBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, test1Layout, 0, descriptorSets[c], nullptr);
-			computeCmdBuffer.pushConstants<float>(test1Layout, vk::ShaderStageFlagBits::eCompute, 0, pushConstantValues);
-			computeCmdBuffer.dispatch(1280 / 16, 720 / 16, 1);
-			computeCmdBuffer.end();
-			c++;
-		}
 
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////
 		uint32_t currentImage;
@@ -527,10 +513,27 @@ int main(int argc, char* argv[])
 				throw std::error_code(result);
 			}
 			currentImage = resultValue.value;
+
+			// fill the command buffer
+			vk::CommandBufferBeginInfo cmdBufInfo;
+			cmdBufInfo.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;
+			vk::CommandBuffer computeCmdBuffer = commandBuffers[currentImage];
+			{
+				std::vector<float> pushConstantValues = { 1280.0f, 720.0f, time, 0.0f };
+				computeCmdBuffer.begin(cmdBufInfo);
+				computeCmdBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
+				computeCmdBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, test1Layout, 0, descriptorSets[currentImage], nullptr);
+				computeCmdBuffer.pushConstants<float>(test1Layout, vk::ShaderStageFlagBits::eCompute, 0, pushConstantValues);
+				computeCmdBuffer.dispatch(1280 / 16, 720 / 16, 1);
+				computeCmdBuffer.end();
+			}
+
+			// submit
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &(commandBuffers[currentImage]);
 			computeQueue.submit(submitInfo, vk::Fence());
 
+			// present
 			presentInfo.pImageIndices = &currentImage;
 			presentInfo.waitSemaphoreCount = 1;
 			presentInfo.pWaitSemaphores = &renderCompleteSemaphore;

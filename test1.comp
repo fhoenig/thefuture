@@ -15,7 +15,7 @@ void main()
 {
 	vec2 p = (-params.resolution.xy + 2.0 * vec2(gl_GlobalInvocationID.xy)) / params.resolution.y;
 
-	vec4 res = vec4(vec3(1.0-smoothstep(0.0, 0.05, abs(length(p)-0.5))), 1.0);
+	vec4 res = vec4(vec3(1.0-smoothstep(0.0, 0.01, abs(length(p)-0.5*abs(sin(params.time))))), 1.0);
 	
 	imageStore(framebufferImage, ivec2(gl_GlobalInvocationID.xy), res);
 }
