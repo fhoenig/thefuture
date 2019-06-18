@@ -4,6 +4,3 @@
 [submodule "External/glfw"]
 	path = External/glfw
 	url = https://github.com/glfw/glfw.git
-[submodule "External/VulkanHpp"]
-	path = External/VulkanHpp
-	url = https://github.com/KhronosGroup/Vulkan-Hpp.git

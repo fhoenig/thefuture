@@ -80,24 +80,13 @@ int main(int argc, char* argv[])
 	vk::PhysicalDeviceMemoryProperties deviceMemoryProperties;
 
 	std::vector<const char*> instance_layer_names;
-	instance_layer_names.push_back("VK_LAYER_GOOGLE_threading");
-	instance_layer_names.push_back("VK_LAYER_LUNARG_param_checker");
-	instance_layer_names.push_back("VK_LAYER_LUNARG_object_tracker");
-	instance_layer_names.push_back("VK_LAYER_LUNARG_mem_tracker");
-	instance_layer_names.push_back("VK_LAYER_LUNARG_device_limits");
-	instance_layer_names.push_back("VK_LAYER_LUNARG_draw_state");
-	instance_layer_names.push_back("VK_LAYER_LUNARG_image");
-	instance_layer_names.push_back("VK_LAYER_LUNARG_swapchain");
-	instance_layer_names.push_back("VK_LAYER_GOOGLE_unique_objects");
-	//instance_layer_names.push_back("VK_LAYER_NV_nsight");
-	//instance_layer_names.push_back("VK_LAYER_NV_optimus");
-	
+	instance_layer_names.push_back("VK_LAYER_KHRONOS_validation");
 	
 	// Vulkan instance
 	vk::ApplicationInfo appInfo;
 	appInfo.pApplicationName = "TheFuture";
 	appInfo.pEngineName = "TheFuture";
-	appInfo.apiVersion = VK_API_VERSION_1_0;
+	appInfo.apiVersion = VK_API_VERSION_1_1;
 
 	std::vector<const char*> enabledExtensions = { VK_KHR_SURFACE_EXTENSION_NAME, VK_EXT_DEBUG_REPORT_EXTENSION_NAME };
 
@@ -322,6 +311,7 @@ int main(int argc, char* argv[])
 		colorAttachmentViewInfo.subresourceRange.levelCount = 1;
 		colorAttachmentViewInfo.subresourceRange.layerCount = 1;
 		colorAttachmentViewInfo.viewType = vk::ImageViewType::e2D;
+        
 
 		// Get the swap chain images
 		auto swapChainImages = device.getSwapchainImagesKHR(swapChain);
